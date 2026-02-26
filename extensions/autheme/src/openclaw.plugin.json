@@ -1,0 +1,27 @@
+{
+  "id": "openclaw-plugin",
+  "name": "authe.me Trust Scoring",
+  "version": "0.1.0",
+  "description": "Agent trust scoring and observability — local scores in logs, optional dashboard reporting",
+  "author": "authe.me",
+  "entry": "plugin.ts",
+  "hooks": [
+    "llm_input",
+    "llm_output",
+    "after_tool_call",
+    "message.processed"
+  ],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "apiKey": { "type": "string", "description": "authe.me API key (optional — omit for local-only mode)" },
+      "endpoint": { "type": "string", "default": "https://dashboard.authe.me/v1/runs/ingest" },
+      "agentId": { "type": "string", "default": "default" },
+      "allowedTools": { "type": "array", "items": { "type": "string" }, "default": [] },
+      "costAlertThreshold": { "type": "number", "default": 0.50 },
+      "latencyAlertThreshold": { "type": "number", "default": 30000 },
+      "logLocally": { "type": "boolean", "default": true },
+      "verbose": { "type": "boolean", "default": false }
+    }
+  }
+}
