@@ -1,0 +1,32 @@
+{
+  "name": "@autheme/openclaw-plugin",
+  "version": "0.1.0",
+  "description": "Agent trust scoring and observability for OpenClaw",
+  "main": "src/plugin.ts",
+  "types": "src/plugin.ts",
+  "license": "MIT",
+  "author": "authe.me",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/autheme/openclaw-plugin"
+  },
+  "keywords": [
+    "openclaw",
+    "plugin",
+    "observability",
+    "trust",
+    "scoring",
+    "agent",
+    "security"
+  ],
+  "dependencies": {},
+  "devDependencies": {
+    "openclaw": "workspace:*",
+    "typescript": "^5.4.0",
+    "vitest": "^2.0.0"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  }
+}
