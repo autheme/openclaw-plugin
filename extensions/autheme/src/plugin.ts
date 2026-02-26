@@ -27,7 +27,7 @@ import type {
 interface AutheMeConfig {
   /** Optional API key — if omitted, plugin runs in local-only mode */
   apiKey?: string;
-  /** authe.me ingest endpoint (default: https://api.authe.me/v1/actions) */
+  /** authe.me ingest endpoint (default: https://dashboard.authe.me/v1/runs/ingest) */
   endpoint?: string;
   /** Agent identifier for multi-agent setups */
   agentId?: string;
@@ -91,7 +91,7 @@ interface TrustFlag {
 // Defaults
 // ---------------------------------------------------------------------------
 
-const DEFAULT_ENDPOINT = "https://api.authe.me/v1/actions";
+const DEFAULT_ENDPOINT = "https://dashboard.authe.me/v1/runs/ingest";
 const DEFAULT_COST_THRESHOLD = 0.5;
 const DEFAULT_LATENCY_THRESHOLD = 30000;
 const STALE_RUN_TTL_MS = 5 * 60 * 1000;
@@ -227,7 +227,7 @@ export default function authemePlugin(config: AutheMeConfig): PluginBase {
       overall,
       dimensions: {
         reliability,
-        scopeAdherence,
+        scope_adherence: score.dimensions.scopeAdherence,
         costEfficiency,
         latencyEfficiency,
       },
@@ -289,7 +289,16 @@ export default function authemePlugin(config: AutheMeConfig): PluginBase {
         started_at: new Date(run.startedAt).toISOString(),
         completed_at: new Date().toISOString(),
         actions: run.actions,
-        trust_score: score,
+        trust_score: {
+          overall: score.overall,
+          dimensions: {
+            reliability: score.dimensions.reliability,
+            scope_adherence: score.dimensions.scopeAdherence,
+            cost_efficiency: score.dimensions.costEfficiency,
+            latency_efficiency: score.dimensions.latencyEfficiency,
+          },
+          flags: score.flags,
+        },
         summary: {
           total_tokens: run.totalTokens,
           total_cost: run.totalCost,
