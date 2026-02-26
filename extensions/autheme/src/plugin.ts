@@ -41,7 +41,7 @@ const plugin = {
     const config = (api as any).pluginConfig ?? {};
     const {
       apiKey = "",
-      endpoint = "https://dashboard.authe.me/v1/runs/ingest",
+      endpoint = "https://api.authe.me/v1/runs/ingest",
       agentId: configAgentId = "default",
       allowedTools = [] as string[],
       costAlertThreshold = 0.50,
