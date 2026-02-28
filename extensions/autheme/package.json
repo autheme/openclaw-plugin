@@ -1,10 +1,15 @@
 {
   "name": "@autheme/openclaw-plugin",
-  "version": "0.1.0",
-  "description": "Agent trust scoring and observability for OpenClaw",
+  "version": "0.2.0",
+  "description": "Real-time agent trust scoring and tamper-proof audit trails for OpenClaw",
   "main": "src/plugin.ts",
   "license": "MIT",
   "author": "authe.me",
+  "homepage": "https://authe.me",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/autheme/openclaw-plugin"
+  },
   "openclaw": {
     "extensions": [
       "src/plugin.ts"

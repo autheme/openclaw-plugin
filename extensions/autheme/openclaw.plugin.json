@@ -1,27 +1,56 @@
 {
-  "id": "openclaw-plugin",
+  "id": "autheme",
   "name": "authe.me Trust Scoring",
-  "version": "0.1.0",
-  "description": "Agent trust scoring and observability — local scores in logs, optional dashboard reporting",
+  "version": "0.2.0",
+  "description": "Real-time agent trust scoring and tamper-proof audit trails",
   "author": "authe.me",
-  "entry": "plugin.ts",
+  "entry": "src/plugin.ts",
   "hooks": [
-    "llm_input",
-    "llm_output",
     "after_tool_call",
-    "message.processed"
+    "agent_end"
   ],
   "configSchema": {
     "type": "object",
+    "additionalProperties": false,
     "properties": {
-      "apiKey": { "type": "string", "description": "authe.me API key (optional — omit for local-only mode)" },
-      "endpoint": { "type": "string", "default": "https://dashboard.authe.me/v1/runs/ingest" },
-      "agentId": { "type": "string", "default": "default" },
-      "allowedTools": { "type": "array", "items": { "type": "string" }, "default": [] },
-      "costAlertThreshold": { "type": "number", "default": 0.50 },
-      "latencyAlertThreshold": { "type": "number", "default": 30000 },
-      "logLocally": { "type": "boolean", "default": true },
-      "verbose": { "type": "boolean", "default": false }
+      "apiEndpoint": {
+        "type": "string",
+        "default": "https://api.authe.me",
+        "description": "authe.me API base URL"
+      },
+      "agentToken": {
+        "type": "string",
+        "description": "JWT token for this agent (get from dashboard.authe.me)"
+      },
+      "allowedTools": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": [],
+        "description": "Tool allowlist. Empty means all tools allowed."
+      },
+      "latencyThreshold": {
+        "type": "number",
+        "default": 30000,
+        "description": "Flag tool calls slower than this (ms)"
+      },
+      "logLocally": {
+        "type": "boolean",
+        "default": true,
+        "description": "Log trust scores to OpenClaw gateway logs"
+      },
+      "verbose": {
+        "type": "boolean",
+        "default": false,
+        "description": "Log every tool call individually"
+      }
     }
+  },
+  "uiHints": {
+    "agentToken": { "label": "Agent Token", "sensitive": true },
+    "apiEndpoint": { "label": "API Endpoint", "placeholder": "https://api.authe.me" },
+    "allowedTools": { "label": "Allowed Tools" },
+    "latencyThreshold": { "label": "Latency Threshold (ms)" },
+    "logLocally": { "label": "Log Locally" },
+    "verbose": { "label": "Verbose Logging" }
   }
 }

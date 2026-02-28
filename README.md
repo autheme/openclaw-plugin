@@ -1,60 +1,58 @@
 # authe.me — Trust Scoring Plugin for OpenClaw
 
-Real-time trust scoring for OpenClaw agents. Hooks into the agent lifecycle to compute a composite trust score after every run, with optional reporting to a remote API.
+Real-time trust scoring for OpenClaw agents. Captures every tool call as it happens and computes a composite trust score, with optional reporting to [authe.me](https://authe.me) for tamper-proof audit trails.
 
 ## What it does
 
-After each agent run completes, the plugin evaluates four dimensions and produces a weighted trust score (0–100):
+The plugin hooks into two agent lifecycle events:
+
+- **`after_tool_call`** — captures each tool execution in real time (name, params, result, duration, errors)
+- **`agent_end`** — finalizes the run, computes a weighted trust score, and optionally ships the full action log to api.authe.me
+
+### Trust Score Dimensions
 
 | Dimension | Weight | What it measures |
 |---|---|---|
 | **Reliability** | 30% | Did the run succeed or fail? |
 | **Scope adherence** | 30% | Did the agent only use allowed tools? |
 | **Cost efficiency** | 20% | Token/cost budget compliance |
-| **Latency efficiency** | 20% | Response time vs. threshold |
+| **Latency efficiency** | 20% | Tool call response times vs threshold |
 
-Scores and flags are logged locally via OpenClaw's subsystem logger. If an API key is configured, run data is also posted to a remote endpoint for historical tracking.
+### Example output
 
+Clean run:
 ```
 [authe.me] Trust Score: 100  (reliability=100 | scope=100 | cost=100 | latency=100)
-[authe.me] agent=main session=agent:main:main tools=0 violations=0 duration=2063ms
+[authe.me] agent=main session=agent:main:main tools=3 violations=0 duration=2063ms
 ```
 
-When scope violations occur:
-
+With violations:
 ```
-[authe.me] Trust Score: 73  (reliability=100 | scope=50 | cost=100 | latency=70)
-🟡 [scope_adherence] Tool "dangerous_exec" not in allowed list
-   → Add "dangerous_exec" to allowedTools config or investigate why it was called
-🟡 [latency_efficiency] Run took 45000ms (threshold: 30000ms)
-   → Check model provider latency or reduce prompt size
+[authe.me] ✓ read_file (150ms)
+[authe.me] 🔴 SCOPE VIOLATION: tool "shell_exec" not in allowed list
+[authe.me] ✓ write_file (80ms)
+[authe.me] Trust Score: 67  (reliability=100 | scope=67 | cost=100 | latency=100)
+🟡 [scope_adherence] Tool "shell_exec" not in allowed list
+   → Add "shell_exec" to allowedTools or investigate why it was called
 ```
 
 ## Install
 
-Clone this repo and add the plugin path to your OpenClaw config:
-
 ```bash
 git clone https://github.com/autheme/openclaw-plugin.git
+cp -r openclaw-plugin/extensions/autheme ~/.openclaw/extensions/autheme
 ```
 
-Edit `~/.openclaw/openclaw.json`:
+Add to your `openclaw.json`:
 
 ```json
 {
   "plugins": {
-    "load": {
-      "paths": [
-        "/path/to/openclaw-plugin/extensions/autheme"
-      ]
-    },
     "entries": {
-      "openclaw-plugin": {
+      "autheme": {
         "enabled": true,
         "config": {
-          "agentId": "my-agent",
-          "allowedTools": ["read", "write", "search", "fetch"],
-          "latencyAlertThreshold": 30000,
+          "allowedTools": ["read_file", "write_file", "browser"],
           "verbose": true
         }
       }
@@ -64,59 +62,68 @@ Edit `~/.openclaw/openclaw.json`:
 ```
 
 Restart the gateway:
-
 ```bash
 openclaw gateway restart
 ```
 
-Verify the plugin loaded:
-
-```bash
-openclaw plugins doctor
-```
-
-You should see `authe.me Trust Scoring` with status `loaded`.
-
 ## Configuration
 
-All config fields are optional. The plugin works in local-only mode with zero config.
-
-| Field | Type | Default | Description |
+| Key | Type | Default | Description |
 |---|---|---|---|
-| `apiKey` | string | — | API key for remote reporting. Omit for local-only logging. |
-| `endpoint` | string | `https://api.authe.me/v1/runs/ingest` | Remote API endpoint |
-| `agentId` | string | `"default"` | Agent identifier for reporting |
-| `allowedTools` | string[] | `[]` | Tool allowlist. Empty = all tools allowed. |
-| `costAlertThreshold` | number | `0.50` | Cost alert threshold (USD) |
-| `latencyAlertThreshold` | number | `30000` | Latency alert threshold (ms) |
-| `logLocally` | boolean | `true` | Log trust scores to OpenClaw logger |
-| `verbose` | boolean | `false` | Log additional context (agent, session, tool counts) |
+| `apiEndpoint` | string | `https://api.authe.me` | API base URL |
+| `agentToken` | string | — | JWT token for this agent (get from dashboard) |
+| `allowedTools` | string[] | `[]` | Tool allowlist. Empty = all tools allowed |
+| `latencyThreshold` | number | `30000` | Flag calls slower than this (ms) |
+| `logLocally` | boolean | `true` | Log scores to gateway logs |
+| `verbose` | boolean | `false` | Log every individual tool call |
+
+### Local-only mode (no account needed)
+
+Just install and go. Without `agentToken`, the plugin logs trust scores locally and never phones home.
+
+### With remote reporting
+
+1. Sign up at [authe.me](https://authe.me)
+2. Register an agent in the dashboard
+3. Get the agent token and add it to config:
+
+```json
+{
+  "autheme": {
+    "enabled": true,
+    "config": {
+      "agentToken": "eyJhbG...",
+      "allowedTools": ["read_file", "write_file"],
+      "verbose": true
+    }
+  }
+}
+```
+
+Actions are hash-chained and stored in a tamper-evident audit trail. Verify integrity anytime at `GET /v1/verify/:agent_id/chain`.
 
 ## How it works
 
-The plugin uses OpenClaw's typed hook system via `api.on("agent_end", handler)`. This hook fires after every completed agent run through the gateway, receiving the full message history, success status, and duration.
+1. Agent starts a run
+2. Each tool call fires `after_tool_call` — plugin captures the tool name, params, result, duration, and checks scope
+3. When the run ends, `agent_end` fires — plugin computes the weighted trust score and logs it
+4. If `agentToken` is set, the full action log is posted to `api.authe.me/v1/ingest` with the correct `IngestBatchRequest` format
+5. The API computes a SHA-256 hash chain, linking each action to the previous one
 
-The scoring pipeline:
+## Technical notes
 
-1. Extract tool calls from assistant messages (blocks with `type: "tool_use"`)
-2. Check each tool against the `allowedTools` list
-3. Compute dimension scores based on success, violations, and latency
-4. Log results locally and optionally POST to the remote API
+- Zero dependencies beyond the OpenClaw plugin SDK
+- Fire-and-forget API calls — never blocks the agent response
+- Runs at priority `-10` (after other plugins)
+- Stale run state is evicted after 1 hour
+- Large tool payloads (>10KB) are truncated before API submission
+- Falls back to message-content extraction if `after_tool_call` doesn't fire for some tools
 
-The plugin runs at priority `-10` (after all other plugins) and is fire-and-forget — it never blocks or modifies the agent's response.
+## Related
 
-**Important:** Hooks only fire through the gateway. Runs with `--local` bypass the hook system.
-
-## Remote API
-
-When `apiKey` is set, the plugin reports each run to the configured endpoint. The payload includes the trust score, individual dimension scores, flags, tool call details, and timing data.
-
-The remote API stores runs with SHA-256 hash chains for tamper detection. Each run's hash incorporates the previous run's hash, creating an append-only audit trail.
-
-## Requirements
-
-- OpenClaw 2026.1.30+
-- Gateway mode (hooks don't fire in `--local` mode)
+- [authe.me](https://authe.me) — agent trust scoring platform
+- [authe Python SDK](https://pypi.org/project/authe/) — for LangChain, CrewAI, and custom agents
+- [OpenClaw Discussion #20575](https://github.com/openclaw/openclaw/discussions/20575) — hook bridge proposal (related to how this plugin captures tool events)
 
 ## License
 
